@@ -36,7 +36,7 @@ Therefore, $\text{effective rate} = (\text{total interest paid} - \text{fees}) /
 
 **Input:** 
 
-`compute_real_interest.py Percent_History_2024_02_16.csv` # run on Feb. 19, 2024
+`python compute_real_interest.py Percent_History_2024_02_16.csv` # run on Feb. 19, 2024
 
 **Output:**
 ```
