@@ -7,14 +7,14 @@ account, and for each investment listed in the file, calculate the effective
 (real) interest rate from the first investment to the earlier of (1) the date
 the principal was paid off or (2) today = the date this program is run.
 
-**Key insight**
+## Key insight
 
 $\text{total interest paid} = \text{rate} \cdot \int_t balance(t)$, where
     $balance(t)$ is the outstanding principal at time $t$. 
     
 Therefore, $\text{effective rate} = (\text{total interest paid} - \text{fees}) / \int_t balance(t)$ .
 
-**Assumptions**
+## Assumptions
 
 1. The file goes all the way back, i.e. each investment's initial deposit
         is listed in the file.
@@ -30,3 +30,45 @@ Therefore, $\text{effective rate} = (\text{total interest paid} - \text{fees}) /
 6. Principal is only added to a given investment once (which is how
         Percent.com investments have worked so far).
 7. A year = 365 days (not, *e.g.*, 360 days).
+
+## Sample output
+
+**Input:** 
+
+
+`compute_real_interest.py Percent_History_2024_02_16.csv` # run on Feb. 19, 2024
+
+**Output:**
+```
+Unhandled CSV file row(s):
+{'Date': '2022-06-17', 'Transaction Type': 'Credit - Promotion', 'Description': 'Promotion', 'Amount': '150.00'}
+{'Date': '2023-04-24', 'Transaction Type': 'Credit - Adjustment', 'Description': 'Other adjustment (credit)', 'Amount': '20.00'}
+
+Summary of effective interest rate for each investment in this account:
+=======================================================================
+    Code      Initial P  Interest     Fees    Balance  Effective rate
+=======================================================================
+ CFI1 2023-2   $  2,550  $    160  $      0  $  1,973       15.3% *
+ ESP1 2022-1   $    653  $     19  $      0  $      0       11.8%
+ FTL1 2023-1   $    603  $     16  $      0  $      0       12.0%
+ IDG1 2022-8   $    775  $     53  $      0  $     -0       11.0%
+ PBN1 2023-1   $  5,000  $    645  $     71  $  5,000       10.9% *
+ PBN6 2023-1   $  5,097  $    467  $     58  $  5,097       10.5% *
+ PCT1 2022-1   $  2,000  $    225  $      0  $      0       14.9%
+ RAP1 2022-6   $    500  $     12  $      0  $      0       13.8%
+ TAP1 2022-5   $    500  $      5  $      0  $      0        9.0%
+ TOR1 2022-5   $    500  $     14  $      0  $      0       11.3%
+ TSM1 2023-1   $  1,000  $     40  $      0  $      0       16.0%
+ TSM1 2023-3   $  1,000  $     53  $      0  $      0       15.8%
+ WSF1 2022-2   $    500  $     50  $      0  $      0       15.0%
+ WSF1 2022-3   $    535  $     59  $      0  $      0       15.0%
+ WSF1 2023-4   $    764  $     93  $      0  $     -0       17.4%
+ WSF1 2023-7   $  5,098  $    468  $      0  $  5,098       17.3% *
+ WSF1 2023-9   $  2,666  $    152  $     15  $  2,666       14.1% *
+=======================================================================
+               $ 29,741  $  2,531  $    144  $ 19,834       13.6%
+
+Mean effective rate 13.6% is weighted by initial principal.
+
+* = effective rate will increase if interest is paid after 2024-02-19.
+```
