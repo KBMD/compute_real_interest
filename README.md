@@ -29,6 +29,7 @@ Therefore, $\text{effective rate} = (\text{total interest paid} - \text{fees}) /
 5. Principal is only added to a given investment once (which is how
         Percent.com investments have worked so far).
 6. A year = 365 days (not, *e.g.*, 360 days).
+7. Unless interest was paid on the date the effective interest rate was computed, the program adds a note that tbe effective rate will increase when another interest payment is received. I could remove that flag by reporting effective rate as of the most recent interest payment, and that may be the rate you expect to see. That is, for a loan with a promised 10% rate, if all previous payments were at 10% and the next payment is not yet due, then the payor is paying 10% as promised. But you haven't yet received the interest accrued since that last payment (and in real life, maybe you never will), so you haven't received all 10% yet. Similarly, before the first interest payment, any investment will show an effective rate of 0%. But that's accurate _until you receive that first payment_.
 
 ## Sample output
 
