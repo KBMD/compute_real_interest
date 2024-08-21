@@ -49,8 +49,11 @@ today = datetime.date.today()
 as_of_date = today # show returns as of today, unless a different date is given
 epsilon = 1E-6
 show_depwd = False # List all deposits and withdrawals?
-depwds = ('Withdrawal - ACH',  'Deposit - ACH', \
+depwds = ('Withdrawal',  'Deposit', \
+          'Withdrawal - ACH',  'Deposit - ACH', \
           'Withdrawal - Wire', 'Deposit - Wire')
+    # The last 2 rows are for the past format; probably no longer needed
+cash_int = 0  # temporary, pending TODO below about interest on cash balance
 
 ERROR_REINITIALIZE = 101
 ERROR_REINITIALIZE_STRING = "ERROR: attempt to initialize a second "+\
@@ -97,6 +100,9 @@ class Investment:
         # Check if object instance with matching code already exists
         if code in Investment.instances:
             # this investment was previously invested in
+            if DEBUG:
+                print("Row = ")
+                print(self)
             print(f"Attempting to initialize investment with code {code}")
             error_exit(ERROR_REINITIALIZE_STRING, ERROR_REINITIALIZE)
         else:
@@ -200,6 +206,11 @@ class Investment:
                 f"time = {self.pt:,.2f} ($\N{MIDDLE DOT}years)"
 
 def read_transactions_csv_file(file_path):
+    """
+    Read the CSV file containing Percent.com transactions into the global
+    variable "transactions", which is a list of dictionaries, one per data 
+    row, in ascending order by date of transaction.
+    """
     with open(file_path, 'r') as file:
         reader = csv.DictReader(file)
         # Read each row as a dictionary
@@ -209,32 +220,19 @@ def read_transactions_csv_file(file_path):
             # Access field names and values
             # for field, value in row.items():
             #    print(f"{field}: {value}")
-    transactions.reverse()  # now transactions are in ascending order
-
-def get_code_from_description(description):
-    """
-    defines code from the Description field of a row in the CSV file
-    ASSUMES that the only thing in parentheses is the code.
-    :param description: Description field from a row in the CSV file (string)
-    :return: The code extracted from the description, string a la "WSF1 2023-9"
-    """
-    code = re.search(r'\((.*?)\)', description)
-    if code:
-        assert len(code.groups()) == 1, f"ERROR: >1 code in {description}"
-        return code.group(1)
-    else:
-        return None
+    transactions.sort(key=lambda d: d['Date'])
 
 def process_transactions(transactions_array):
     other_rows = False # Have there been any unhandled CSV file rows?
     for i in range(len(transactions_array)):
-        global as_of_date
+        global as_of_date, cash_int
         row = transactions_array[i]
-        row_code = get_code_from_description(row['Description'])
+        row_code = row['Deal Ticker']
         row_date = datetime.datetime.strptime(row['Date'], date_format).date()
         # Note row_date is of type <class 'datetime.datetime'>
         row_amt  = float(row['Amount'])
         row_type = row['Transaction Type']
+        row_description = row['Description']
         if row_date > as_of_date:
             if DEBUG:
                 if row_code == None:
@@ -245,15 +243,32 @@ def process_transactions(transactions_array):
                           "after as-of date."
                 print(msg)
             continue
-        if   row_type == 'Investment':
+        if   row_type == 'Investment':  # it's the 1st line for that investment
             Investment(row_code, row_amt, row_date)
         elif row_type == 'Principal':
             this_investment = Investment.get_instance(row_code)
             this_investment.update_from_return_of_principal(row_date, row_amt)
         elif row_type == 'Interest':
-            this_investment = Investment.get_instance(row_code)
-            this_investment.update_from_interest(row_amt)
-            this_investment.itouched = row_date
+            if 'Cash' in row_description:
+                row_code = 'Cash'
+                print(row)
+                cash_int += row_amt
+                # TODO: figure interest on cash (from the date when Percent.com
+                #   started paying interest on cash balance)
+                #   General idea follows: 
+                #   if first such row:
+                #       row_code = 'Cash'
+                #       Elsewhere track how much cash is in the account and
+                #           since when, etc.--codes Promotion, Adjustment,
+                #           Deposit, Withdrawal, with the first such using the
+                #           following, modified by date when Percent started
+                #           paying interest on cash balance:
+                #       if Investment.getinstance(row_code) == None:
+                #           Investment(row_code, row_amt, row_date)
+            else:  # it's interest on a regular investment:
+                this_investment = Investment.get_instance(row_code)
+                this_investment.update_from_interest(row_amt)
+                this_investment.itouched = row_date
         elif row_type == 'Fee':
             this_investment = Investment.get_instance(row_code)
             this_investment.update_from_fee(row_amt)
@@ -285,6 +300,7 @@ def print_footer(pr,inte,fee,bal,rate,anyflags):
           f"{rate:>12,.1%}")
     print()
     print(f"Mean effective rate {rate:.1%} is weighted by initial principal.")
+    print(f"Total interest paid on cash balance = ${cash_int:.0f}.")
     if anyflags:
         print()
         print(f"* = effective rate will increase if interest is paid after {as_of_date}.")

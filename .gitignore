@@ -1,3 +1,10 @@
+# My personal data files
+Percent_History_*.csv
+Percent_History_*.ods
+
+# gedit backup files
+*~
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
