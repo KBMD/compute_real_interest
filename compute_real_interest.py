@@ -36,7 +36,7 @@ Thanks to gpt.wustl.edu for help on Python classes
 """
 
 import datetime
-import csv, sys, os, re
+import csv, sys, os
 
 # Global variables
 DEBUG  = True
@@ -49,8 +49,8 @@ today = datetime.date.today()
 as_of_date = today # show returns as of today, unless a different date is given
 epsilon = 1E-6
 show_depwd = False # List all deposits and withdrawals?
-depwds = ('Withdrawal',  'Deposit', \
-          'Withdrawal - ACH',  'Deposit - ACH', \
+depwds = ('Withdrawal',  'Deposit', ''
+          'Withdrawal - ACH',  'Deposit - ACH', 
           'Withdrawal - Wire', 'Deposit - Wire')
     # The last 2 rows are for the past format; probably no longer needed
 cash_int = 0  # temporary, pending TODO below about interest on cash balance
@@ -62,7 +62,7 @@ ERROR_PARSE_ARGS = 102
 ERROR_PARSE_ARGS = 1  # Note: don't need a code printed for this error
 ERROR_PARSE_ARGS_STRING = \
     f"SYNTAX: {sys.argv[0]} path_and_filename.csv [2024-02-16]\n"+\
-     "  e.g.: compute_real_interest.py .\Percent_History_2024-02-15.csv\n"+\
+     "  e.g.: compute_real_interest.py .\\Percent_History_2024-02-15.csv\n"+\
      "  NOTE: Optional 2nd argument = date as of which the return "+\
          "is calculated.\n"
 ERROR_DATE_FORMAT = 103
@@ -108,7 +108,7 @@ class Investment:
         else:
             # Initialize the new instance ...
             p0 = float(p0)
-            assert p0 < 0, "amount invested must be negative in the CSV file"
+            assert p0 <= 0, f"amount invested must be negative in the CSV file, but is {p0}"
             assert close_enough(100*p0, int(100*p0)), \
                 "amounts must be given as whole cents e.g. zyxw.vu or zyxw"
             self.code = code
@@ -233,9 +233,14 @@ def process_transactions(transactions_array):
         row_amt  = float(row['Amount'])
         row_type = row['Transaction Type']
         row_description = row['Description']
+        row_status = row['Status']
+        if row_status == 'Pending':
+            # TODO: could print these somewhere as pending investments, if desired
+            continue  # no investment yet (avoids the p0<0 assertion and a divide-by-zero error)
         if row_date > as_of_date:
             if DEBUG:
-                if row_code == None:
+                if row_code is None:
+                    # TODO: the CSV file has an empty cell here for interest on cash
                     msg = f"DEBUG: Skip row {row_type}: {row_date} is "+ \
                           "after as-of date."
                 else:
@@ -243,7 +248,7 @@ def process_transactions(transactions_array):
                           "after as-of date."
                 print(msg)
             continue
-        if   row_type == 'Investment':  # it's the 1st line for that investment
+        if row_type == 'Investment':  # it's the 1st line for that investment
             Investment(row_code, row_amt, row_date)
         elif row_type == 'Principal':
             this_investment = Investment.get_instance(row_code)
@@ -251,7 +256,6 @@ def process_transactions(transactions_array):
         elif row_type == 'Interest':
             if 'Cash' in row_description:
                 row_code = 'Cash'
-                print(row)
                 cash_int += row_amt
                 # TODO: figure interest on cash (from the date when Percent.com
                 #   started paying interest on cash balance)
@@ -261,9 +265,9 @@ def process_transactions(transactions_array):
                 #       Elsewhere track how much cash is in the account and
                 #           since when, etc.--codes Promotion, Adjustment,
                 #           Deposit, Withdrawal, with the first such using the
-                #           following, modified by date when Percent started
+                #           following, +/- modified by date when Percent started
                 #           paying interest on cash balance:
-                #       if Investment.getinstance(row_code) == None:
+                #       if ['Cash' in row_description and] Investment.getinstance(row_code) is None:
                 #           Investment(row_code, row_amt, row_date)
             else:  # it's interest on a regular investment:
                 this_investment = Investment.get_instance(row_code)
@@ -301,6 +305,7 @@ def print_footer(pr,inte,fee,bal,rate,anyflags):
     print()
     print(f"Mean effective rate {rate:.1%} is weighted by initial principal.")
     print(f"Total interest paid on cash balance = ${cash_int:.0f}.")
+    # TODO: add current cash balance
     if anyflags:
         print()
         print(f"* = effective rate will increase if interest is paid after {as_of_date}.")
@@ -341,7 +346,14 @@ def main():
     print_header()
     anyflags = False
     for instance in sorted(Investment.instances.keys()):
-        inv =  Investment.instances[instance]
+        inv = Investment.instances[instance]
+        # TODO: print all this to a file [in memory?] rather than to stdout, 
+        #    then optionally sort by decreasing balance before printing the 
+        #    table (so as to have all non-zero-balance investments first).
+        #    Or, print by decreasing initial principal. Or by (first) investment
+        #    date. Would also like to print by maturity date, but we won't know
+        #    that from the .CSV file.
+        #    print(inv.code, f"{inv.balance:.2f}") -> output: PCT1 2022-1 0.00  (e.g.)
         # print a summary line for this investment "inv", and add its
         # information to the "total" variables
         totpr += inv.p0
