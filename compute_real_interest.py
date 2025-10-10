@@ -29,14 +29,14 @@ the principal was paid off or (2) today = the date this program is run.
 #TODO: check these assumptions in the program, or spit out a disclaimer
 
 Created on Fri Feb  9 21:15:09 2024
-Current version 16 Feb 2024
+Current version 10 Oct 2025
 
 @author: kevin@theBlacks.us
 Thanks to gpt.wustl.edu for help on Python classes
 """
 
 import datetime
-import csv, sys, os
+import csv, sys, os  # noqa: E401
 
 # Global variables
 DEBUG  = True
@@ -69,6 +69,11 @@ ERROR_DATE_FORMAT = 103
 ERROR_DATE_FORMAT_STRING = f"Expected date format is {date_format}"
 ERROR_NO_FILE = 104
 ERROR_NO_FILE_STRING = "File not found"
+ERROR_NOT_A_HISTORY_FILE = 105
+ERROR_NOT_A_HISTORY_FILE_STRING = """Wrong file type: does not start with the characters "ID".
+You need to download from the "Transaction History" page. On that page,
+click the icon that looks like 3 vertical boxes and select "All Columns".
+Then click the adjacent downward arrow."""
 
 def close_enough(a, b, epsilon=1E-6):
     "Return true if a and b differ (absolutely) by less than epsilon."
@@ -93,7 +98,7 @@ class Investment:
                 INTEGRAL OVER t { balance(t)}, where t = time
                 NOTE: pt is in units $*years
             balance (units: $)
-            interest = total interest paid to date (units: 1/year)
+            interest = total interest paid to date (units: $)
             fees = total fees paid to date (units: $)
         """
 
@@ -211,6 +216,14 @@ def read_transactions_csv_file(file_path):
     variable "transactions", which is a list of dictionaries, one per data 
     row, in ascending order by date of transaction.
     """
+    # first check that you're giving it the right kind of file
+    with open(file_path, 'r') as file:
+        first_line = file.readline()
+        if not first_line.startswith('ID'):
+            print(f"First line of file: \n{first_line}" + 
+                f"with start characters \"{first_line[:2]}\"")
+            error_exit(ERROR_NOT_A_HISTORY_FILE_STRING, ERROR_NOT_A_HISTORY_FILE)
+    # now read in the CSV file appropriately
     with open(file_path, 'r') as file:
         reader = csv.DictReader(file)
         # Read each row as a dictionary
@@ -321,6 +334,8 @@ def print_footer(pr,inte,fee,bal,rate,anyflags):
 
 def main():
     global as_of_date
+    # TODO: replace next 14-ish lines by commands from argparse 
+    # (https://docs.python.org/3/howto/argparse.html)
     if len(sys.argv) == 2 or len(sys.argv) == 3:
         transactions_csv_file_path = sys.argv[1]
         if not os.path.exists(transactions_csv_file_path):
@@ -345,7 +360,12 @@ def main():
     wt_rate_sum = 0 # sums (balance*effective_rate) over investments
     print_header()
     anyflags = False
-    for instance in sorted(Investment.instances.keys()):
+    # Sort alphabetically by investment Code:
+    # for instance in sorted(Investment.instances.keys()):
+    # Sort by decreasing Balance:
+    temp = sorted(Investment.instances.items(), key=lambda item: item[1].balance, reverse=True)
+    for item in temp:
+        instance = item[0]
         inv = Investment.instances[instance]
         # TODO: print all this to a file [in memory?] rather than to stdout, 
         #    then optionally sort by decreasing balance before printing the 
@@ -365,7 +385,8 @@ def main():
         if inv.balance > 0.99 and inv.itouched < as_of_date:
             # Note, the line above justifies initializing itouched
             # to the date of the initial investment.
-            rateflag = " *"; anyflags = True
+            rateflag = " *"
+            anyflags = True
         else:
             rateflag = ""
         print(f"{inv.code:>12}   " +\
