@@ -200,7 +200,12 @@ class Investment:
         assert date >= self.ptouched, \
             "ERROR: date given is before a previously recorded balance change"
         current_pt = self.pt + ((date - self.ptouched).days/365)*self.balance
-        return (self.interest - self.fees) / current_pt
+        if current_pt == 0:
+            if self.interest - self.fees > 0:
+                print(f"WARNING: interest but no investment; {self.code}")
+            return 0
+        else:
+            return (self.interest - self.fees) / current_pt
 
     def __str__(self):
         return "Investment: "+\
@@ -247,9 +252,6 @@ def process_transactions(transactions_array):
         row_type = row['Transaction Type']
         row_description = row['Description']
         row_status = row['Status']
-        if row_status == 'Pending':
-            # TODO: could print these somewhere as pending investments, if desired
-            continue  # no investment yet (avoids the p0<0 assertion and a divide-by-zero error)
         if row_date > as_of_date:
             if DEBUG:
                 if row_code is None:
@@ -261,7 +263,8 @@ def process_transactions(transactions_array):
                           "after as-of date."
                 print(msg)
             continue
-        if row_type == 'Investment':  # it's the 1st line for that investment
+        if row_type == 'Investment' and row_status == 'Confirmed':  
+            # it's the 1st line for that investment
             Investment(row_code, row_amt, row_date)
         elif row_type == 'Principal':
             this_investment = Investment.get_instance(row_code)
@@ -290,11 +293,15 @@ def process_transactions(transactions_array):
             this_investment = Investment.get_instance(row_code)
             this_investment.update_from_fee(row_amt)
         else:
-            if show_depwd or row_type not in depwds: #  we want to print it
+            if show_depwd or row_type not in depwds or row_status == 'Pending': 
+                # We want to print it.
+                # TODO: could print "Pending" investments elsewhere, if desired;
+                #   hopefully skipping them other than printing them here avoids the 
+                #   p0<0 assertion or a divide-by-zero error)
                 if not other_rows:  # this is our first, so print a header
                     print("Unhandled CSV file row(s):")
                     other_rows = True
-                print(row)
+                print(" ¤", row)
 
 def error_exit(status_string, error_code=1):
     print(status_string)
@@ -380,6 +387,10 @@ def main():
         totbal += inv.balance
         totint += inv.interest
         totfee += inv.fees
+#        if inv.pt == 0 and as_of_date == today :
+#            print("WARNING: zero investment yet, ", inv.code)
+#            inv_rate = np.nan
+#        else:
         inv_rate = inv.eff_rate(as_of_date)
         wt_rate_sum += inv.p0 * inv_rate
         if inv.balance > 0.99 and inv.itouched < as_of_date:
