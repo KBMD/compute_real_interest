@@ -84,57 +84,6 @@ class Investment:
         # Here, an instance is an object containing information about a
         # specific investment, e.g. with code "PBN6 2023-1".
 
-    def __init__(self, code, p0, date, pt=0, interest=0, fees=0):
-        """
-        Data attributes:
-            code = short string identifying investment, e.g. "PCT1 2022-1"
-            p0 = initial principal invested (read in as a negative number,
-                stored as positive number) (units: $)
-            ptouched = date when principal was last changed
-            itouched = date of last interest payment (or first deposit)
-                Note: ?touched are of type <class 'datetime.date'>
-            pt = principal × time on which interest has accrued"
-                actually, it's the discrete equivalent of
-                INTEGRAL OVER t { balance(t)}, where t = time
-                NOTE: pt is in units $*years
-            balance (units: $)
-            interest = total interest paid to date (units: $)
-            fees = total fees paid to date (units: $)
-        """
-
-        # Check if object instance with matching code already exists
-        if code in Investment.instances:
-            # this investment was previously invested in
-            if DEBUG:
-                print("Row = ")
-                print(self)
-            print(f"Attempting to initialize investment with code {code}")
-            error_exit(ERROR_REINITIALIZE_STRING, ERROR_REINITIALIZE)
-        else:
-            # Initialize the new instance ...
-            p0 = float(p0)
-            assert p0 <= 0, f"amount invested must be negative in the CSV file, but is {p0}"
-            assert close_enough(100*p0, int(100*p0)), \
-                "amounts must be given as whole cents e.g. zyxw.vu or zyxw"
-            self.code = code
-            self.p0 = -p0  #WARNING: note additive inverse (see docstring)
-            self.ptouched = date
-            # Not sure if the next line is the right choice, but it seems
-            # better than not initializing the "last interest payment" 
-            # variable at all ...
-            self.itouched = date
-            self.pt = pt
-            self.interest = interest
-            self.fees = fees
-            self.balance = self.p0
-            # ... and (since we got here without triggering assertions above)
-            # add the new instance to the instances dictionary:
-            Investment.instances[code] = self
-        if DEBUG2:
-            print("This investment is: ")
-            print(self)
-            print("=========")
-
     @classmethod
     def get_instance(cls, code):
         """Checks to see if an investment exists (i.e. has already been seen
@@ -145,6 +94,73 @@ class Investment:
             return cls.instances[code]
         else:
             return None
+
+    def __init__(self, code, p0, date, interest=0, fees=0):
+        """
+        Data attributes:
+            code = short string identifying investment, e.g. "PCT1 2022-1"
+            p0 = initial principal invested (read in as a negative number,
+                stored as positive number) (units: $)
+            ptouched = date when principal was last changed
+            itouched = date of last interest payment (or first deposit)
+                Note: ?touched are of type <class 'datetime.date'>
+            pt = principal × time on which interest has accrued"
+                actually, it's the discrete equivalent of
+                INTEGRAL OVER t {balance(t)}, where t = time
+                NOTE: pt is in units of $*years
+            balance (units: $)
+            interest = total interest paid to date (units: $)
+            fees = total fees paid to date (units: $)
+        """
+
+        p0 = float(p0)
+        assert close_enough(100*p0, int(100*p0)), \
+            "amounts must be given as whole cents e.g. zyxw.vu or zyxw"
+
+        # Does object instance with matching code already exist?
+        instance = Investment.get_instance(code)
+        if instance is None:  # then this is its first appearance
+            # initialize it
+            self.code = code
+            assert p0 <= 0, f"amount invested must be negative in the CSV file, but is {p0}"
+            self.p0 = -p0  #WARNING: note additive inverse (see docstring)
+            self.ptouched = date
+            # Not sure if the next line is the right choice, but it seems
+            # better than not initializing the "last interest payment" 
+            # variable at all ...
+            self.itouched = date
+            self.pt = 0
+            self.interest = interest
+            self.fees = fees
+            self.balance = self.p0
+            # ... and (since we got here without triggering assertions above)
+            # add the new instance to the instances dictionary:
+            Investment.instances[code] = self
+        else:  # then we've seen this investment before and are adding to the principal
+            # TODO: save WARNING for bottom of chart?
+            if DEBUG: 
+                print(f"WARNING: 2nd investment in {code}: {date}, {p0}")
+            self = instance
+
+            # first we update self.pt with the discrete integral based on previous
+            #   balance times time passed since last touched:
+            self.pt += ((date - self.ptouched).days/365)*self.balance
+                # NOTE ptouched and balance in above line are the _old_ values
+            self.ptouched = date
+            # Now we need to update self.pt by amount added to (or subtracted from) the 
+            # balance, so a step function in pt:
+            self.pt -= p0  # WARNING: note additive inverse (see docstring)  
+            # And ditto need to update the balance
+            self.balance -= p0  # WARNING: note additive inverse (see docstring)
+            # Also update the total principal invested in this investment
+            self.p0 -= p0  # WARNING: note additive inverse (see docstring)
+            # We don't change interest or fees. 
+
+        if DEBUG2:
+            print("This investment is: ")
+            print(self)
+            print("=========")
+
 
     def update_from_return_of_principal(self, date, returned):
         """
@@ -174,9 +190,11 @@ class Investment:
     def update_from_fee(self, fee):
         assert fee < 0, "Fees must be given as a negative number"
         self.fees -= fee
+        # TODO: don't I need to update self.balance, too?
 
     def update_from_interest(self, interest_paid_here):
         self.interest += interest_paid_here
+        # TODO: don't I need to update self.balance, too?
 
     def eff_rate(self, date):
         """
@@ -245,6 +263,7 @@ def process_transactions(transactions_array):
     for i in range(len(transactions_array)):
         global as_of_date, cash_int
         row = transactions_array[i]
+        row_ID = row['ID']
         row_code = row['Deal Ticker']
         row_date = datetime.datetime.strptime(row['Date'], date_format).date()
         # Note row_date is of type <class 'datetime.datetime'>
@@ -256,15 +275,15 @@ def process_transactions(transactions_array):
             if DEBUG:
                 if row_code is None:
                     # TODO: the CSV file has an empty cell here for interest on cash
-                    msg = f"DEBUG: Skip row {row_type}: {row_date} is "+ \
+                    msg = f"DEBUG: Skip row {row_type}, {row_ID}: {row_date} is "+ \
                           "after as-of date."
                 else:
-                    msg = f"DEBUG: Skip row {row_code}: {row_date} is "+ \
+                    msg = f"DEBUG: Skip row {row_code}, {row_ID}: {row_date} is "+ \
                           "after as-of date."
                 print(msg)
             continue
         if row_type == 'Investment' and row_status == 'Confirmed':  
-            # it's the 1st line for that investment
+            # it's the 1st line for that investment, or an addition to principal
             Investment(row_code, row_amt, row_date)
         elif row_type == 'Principal':
             this_investment = Investment.get_instance(row_code)
@@ -284,7 +303,7 @@ def process_transactions(transactions_array):
                 #           following, +/- modified by date when Percent started
                 #           paying interest on cash balance:
                 #       if ['Cash' in row_description and] Investment.getinstance(row_code) is None:
-                #           Investment(row_code, row_amt, row_date)
+                #           Investment(row_ID, row_code, row_amt, row_date)
             else:  # it's interest on a regular investment:
                 this_investment = Investment.get_instance(row_code)
                 this_investment.update_from_interest(row_amt)
